@@ -2,17 +2,7 @@ import sys
 import ctypes
 import llvm.ee
 import llcc.typesystem
-
-#-------------------------------------------------------------------------------
-# ABI convetions
-#-------------------------------------------------------------------------------
-
-
-ABI_WIN32 = {32: 'Win32/i386',
-             64: 'Win64/AMD64'}
-
-ABI_SYSTEMV = {32: 'SystemV/i386',
-               64: 'SystemV/AMD64'}
+import llcc.abi
 
 #-------------------------------------------------------------------------------
 # Target Information
@@ -45,10 +35,12 @@ class TargetInfo(object):
 
         # determine ABI
         if sys.platform.startswith('win32'):
-            self.abi = ABI_WIN32[self.ptrsize]
+            self.abi = llcc.abi.ABI_WIN32[self.ptrsize]
         else:
             # FIXME
-            self.abi = ABI_SYSTEMV[self.ptrsize]
+            self.abi = llcc.abi.ABI_SYSTEMV[self.ptrsize]
+
+        self.abi_info = llcc.abi.ABIInfo.get_class(self.abi)
 
         # align and sizeof
         # FIXME: verify that alignment is the same as sizeof?
@@ -94,3 +86,9 @@ class TargetInfo(object):
             raise ValueError("illegal sizeof function type")
         return self.sizeof_table[ty]
 
+    def compute_abi_info(self, fnty):
+        abi_info = self.abi_info(target=self)
+        if isinstance(fnty, llcc.typesystem.QualType):
+            fnty = fnty.type
+        abi_info.compute_info(fnty)
+        return abi_info
