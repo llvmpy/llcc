@@ -23,16 +23,32 @@ class CType(object):
 
 class CScalarType(CType):
     is_scalar = True
+    is_integer = False
+    is_decimal = False
+    is_float = False
 
-    def __init__(self, name, signed):
+    def __init__(self, name):
         self.name = name
-        self.signed = signed
 
     def __str__(self):
         return '%s' % self.name
 
     def describe(self):
         return self.name
+
+class CIntegerType(CScalarType):
+    is_integer = True
+    is_signed = False
+    is_unsigned = False
+
+class CSignedType(CIntegerType):
+    is_signed = True
+
+class CUnsignedType(CIntegerType):
+    is_unsigned = True
+
+class CFloatType(CScalarType):
+    is_float = True
 
 class CVoidType(CType):
     is_void = True
@@ -180,29 +196,27 @@ class CTypeSystem(object):
     def load_sys_independ_builtins(self):
         # specials
         self.builtins.void_type = CVoidType()
-        self.builtins.bool_type  = CScalarType(name='_Bool', signed=False)
+        self.builtins.bool_type  = CUnsignedType(name='_Bool')
         # chars
-        self.builtins.char_type  = CScalarType(name='char', signed=True)
-        self.builtins.uchar_type = CScalarType(name='unsigned char',
-                                               signed=False)
+        self.builtins.char_type  = CSignedType(name='char')
+        self.builtins.uchar_type = CUnsignedType(name='unsigned char')
 
         # signed integer
-        self.builtins.int8_type  = CScalarType(name='int8_t', signed=True)
-        self.builtins.int16_type = CScalarType(name='int16_t', signed=True)
-        self.builtins.int32_type = CScalarType(name='int32_t', signed=True)
-        self.builtins.int64_type = CScalarType(name='int64_t', signed=True)
+        self.builtins.int8_type  = CSignedType(name='int8_t')
+        self.builtins.int16_type = CSignedType(name='int16_t')
+        self.builtins.int32_type = CSignedType(name='int32_t')
+        self.builtins.int64_type = CSignedType(name='int64_t')
 
         # unsigned integer
-        self.builtins.uint8_type  = CScalarType(name='uint8_t', signed=False)
-        self.builtins.uint16_type = CScalarType(name='uint16_t', signed=False)
-        self.builtins.uint32_type = CScalarType(name='uint32_t', signed=False)
-        self.builtins.uint64_type = CScalarType(name='uint64_t', signed=False)
+        self.builtins.uint8_type  = CUnsignedType(name='uint8_t')
+        self.builtins.uint16_type = CUnsignedType(name='uint16_t')
+        self.builtins.uint32_type = CUnsignedType(name='uint32_t')
+        self.builtins.uint64_type = CUnsignedType(name='uint64_t')
 
         # real
-        self.builtins.float_type = CScalarType(name='float', signed=True)
-        self.builtins.double_type = CScalarType(name='double', signed=True)
-        self.builtins.longdouble_type = CScalarType(name='long double',
-                                                    signed=True)
+        self.builtins.float_type = CFloatType(name='float')
+        self.builtins.double_type = CFloatType(name='double')
+        self.builtins.longdouble_type = CFloatType(name='long double')
 
         # create mapping to ctypes
         cm = {
