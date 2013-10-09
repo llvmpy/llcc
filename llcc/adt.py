@@ -91,5 +91,5 @@ class FlagSet(MutableSet):
         return fs
 
     def __str__(self):
-        return ' '.join(list(self))
+        return str(tuple(self))
 

@@ -1,11 +1,12 @@
 from __future__ import print_function
 import unittest
-from llcc.typesystem import CTypeSystem
+from llcc.target import TargetInfo
 
 class TestTypeSystem(unittest.TestCase):
     def test_exercise(self):
-        cts = CTypeSystem()
-        cts.init_with_ctypes() # follow python ctypes
+        ti = TargetInfo.get_host_target()
+        cts = ti.typesystem
+
         print('list builtins', cts.builtins)
         self.assertTrue('int64_t' == str(cts.get_int(64)),
                         "correct name")

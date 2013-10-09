@@ -143,6 +143,10 @@ class CTypeSystem(object):
     def load_sys_independ_builtins(self):
         # specials
         self.builtins.void_type = CVoidType()
+        self.builtins.bool_type  = CScalarType(name='_Bool')
+        # chars
+        self.builtins.char_type  = CScalarType(name='char')
+        self.builtins.uchar_type = CScalarType(name='unsigned char')
 
         # signed integer
         self.builtins.int8_type  = CScalarType(name='int8_t')
@@ -163,7 +167,12 @@ class CTypeSystem(object):
 
         # create mapping to ctypes
         cm = {
-            'void_type': None,
+            'void_type':    None,
+
+            'bool_type':    ctypes.c_bool,
+
+            'char_type':    ctypes.c_char,
+            'uchar_type':   ctypes.c_byte,
 
             'int8_type':    ctypes.c_int8,
             'int16_type':   ctypes.c_int16,
@@ -182,19 +191,40 @@ class CTypeSystem(object):
 
         for lt, ct in cm.items():
             self.cmappings[ct] = self.builtins[lt]
+            
+    def init_type_mapping(self, cmap):
+        for lt, ct in cmap.items():
+            self.builtins[lt] = self.cmappings[ct]
 
-    def init_with_ctypes(self):
+    def init_host_type_mapping(self):
+        '''Initialize type mapping with host setting
+
+        Use python ctypes as a guide
+        '''
         self.load_sys_independ_builtins()
-        cm = {
+        cmap = {
             'int_type':       ctypes.c_int,
             'uint_type':      ctypes.c_uint,
+            'short_type':     ctypes.c_short,
+            'ushort_type':    ctypes.c_ushort,
             'long_type':      ctypes.c_long,
             'ulong_type':     ctypes.c_ulong,
             'longlong_type':  ctypes.c_longlong,
             'ulonglong_type': ctypes.c_ulonglong,
         }
-        for lt, ct in cm.items():
-            self.builtins[lt] = self.cmappings[ct]
+        ptrsize = ctypes.sizeof(ctypes.c_void_p) * 8
+        cmap['intptr_type'] = getattr(ctypes, 'c_int%d' % ptrsize)
+
+        self.init_type_mapping(cmap)
+
+    def get_intptr(self):
+        return QualType(self.builtins.intptr_type)
+
+    def get_opaque_ptr(self):
+        return self.get_pointer(self.get_void())
+
+    def get_void(self):
+        return QualType(self.builtins.void_type)
 
     def get_int(self, bits=None):
         if bits:
@@ -208,29 +238,29 @@ class CTypeSystem(object):
         else:
             return QualType(self.builtins.uint_type)
 
-    def get_long(self, bits=None):
-        if bits:
-            return QualType(self.builtins['long_type'])
-        else:
-            return QualType(self.builtins.long_type)
+    def get_char(self):
+        return QualType(self.builtins.char_type)
 
-    def get_ulong(self, bits=None):
-        if bits:
-            return QualType(self.builtins['ulong_type'])
-        else:
-            return QualType(self.builtins.long_type)
+    def get_uchar(self):
+        return QualType(self.builtins.uchar_type)
 
-    def get_longlong(self, bits=None):
-        if bits:
-            return QualType(self.builtins['longlong_type'])
-        else:
-            return QualType(self.builtins.longlong_type)
+    def get_short(self):
+        return QualType(self.builtins.short_type)
 
-    def get_ulonglong(self, bits=None):
-        if bits:
-            return QualType(self.builtins['ulonglong_type'])
-        else:
-            return QualType(self.builtins.ulonglong_type)
+    def get_ushort(self):
+        return QualType(self.builtins.ushort_type)
+
+    def get_long(self):
+        return QualType(self.builtins.long_type)
+
+    def get_ulong(self):
+        return QualType(self.builtins.ulong_type)
+
+    def get_longlong(self):
+        return QualType(self.builtins.longlong_type)
+
+    def get_ulonglong(self):
+        return QualType(self.builtins.ulonglong_type)
 
     def get_float(self):
         return QualType(self.builtins.float_type)
@@ -280,7 +310,17 @@ class CTypeSystem(object):
 #-------------------------------------------------------------------------------
 
 class Qualifiers(adt.FlagSet):
-    possibilities = 'const', 'restrict', 'volatile', 'register'
+    class Enum(object):
+        def __init__(self, name):
+            self.name = name
+        def __str__(self):
+            return self.name
+
+    CONST = Enum('const')
+    RESTRICT = Enum('restrict')
+    VOLATILE = Enum('volatile')
+
+    possibilities = CONST, RESTRICT, VOLATILE
 
 class QualType(object):
     '''Qualified Type
@@ -310,7 +350,7 @@ class QualType(object):
 
     def __str__(self):
         if self.qualifiers:
-            qs = '%s ' % self.qualifiers
+            qs = '%s ' % ' '.join(str(x) for x in self.qualifiers)
         else:
             qs = ''
         return qs + str(self.type)
@@ -331,13 +371,20 @@ class QualType(object):
         return cloned
 
     def with_const(self):
-        return self._with('const')
+        return self._with(Qualifiers.CONST)
 
     def without_const(self):
-        return self._without('const')
+        return self._without(Qualifiers.CONST)
 
     def with_restrict(self):
-        return self._with('restrict')
+        return self._with(Qualifiers.RESTRICT)
 
     def without_restrict(self):
-        return self._without('restrict')
+        return self._without(Qualifiers.RESTRICT)
+
+    def with_volatile(self):
+        return self._with(Qualifiers.VOLATILE)
+
+    def without_volatile(self):
+        return self._without(Qualifiers.VOLATILE)
+
