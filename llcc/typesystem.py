@@ -24,8 +24,9 @@ class CType(object):
 class CScalarType(CType):
     is_scalar = True
 
-    def __init__(self, name):
+    def __init__(self, name, signed):
         self.name = name
+        self.signed = signed
 
     def __str__(self):
         return '%s' % self.name
@@ -179,27 +180,29 @@ class CTypeSystem(object):
     def load_sys_independ_builtins(self):
         # specials
         self.builtins.void_type = CVoidType()
-        self.builtins.bool_type  = CScalarType(name='_Bool')
+        self.builtins.bool_type  = CScalarType(name='_Bool', signed=False)
         # chars
-        self.builtins.char_type  = CScalarType(name='char')
-        self.builtins.uchar_type = CScalarType(name='unsigned char')
+        self.builtins.char_type  = CScalarType(name='char', signed=True)
+        self.builtins.uchar_type = CScalarType(name='unsigned char',
+                                               signed=False)
 
         # signed integer
-        self.builtins.int8_type  = CScalarType(name='int8_t')
-        self.builtins.int16_type = CScalarType(name='int16_t')
-        self.builtins.int32_type = CScalarType(name='int32_t')
-        self.builtins.int64_type = CScalarType(name='int64_t')
+        self.builtins.int8_type  = CScalarType(name='int8_t', signed=True)
+        self.builtins.int16_type = CScalarType(name='int16_t', signed=True)
+        self.builtins.int32_type = CScalarType(name='int32_t', signed=True)
+        self.builtins.int64_type = CScalarType(name='int64_t', signed=True)
 
         # unsigned integer
-        self.builtins.uint8_type  = CScalarType(name='uint8_t')
-        self.builtins.uint16_type = CScalarType(name='uint16_t')
-        self.builtins.uint32_type = CScalarType(name='uint32_t')
-        self.builtins.uint64_type = CScalarType(name='uint64_t')
+        self.builtins.uint8_type  = CScalarType(name='uint8_t', signed=False)
+        self.builtins.uint16_type = CScalarType(name='uint16_t', signed=False)
+        self.builtins.uint32_type = CScalarType(name='uint32_t', signed=False)
+        self.builtins.uint64_type = CScalarType(name='uint64_t', signed=False)
 
         # real
-        self.builtins.float_type = CScalarType(name='float')
-        self.builtins.double_type = CScalarType(name='double')
-        self.builtins.longdouble_type = CScalarType(name='long double')
+        self.builtins.float_type = CScalarType(name='float', signed=True)
+        self.builtins.double_type = CScalarType(name='double', signed=True)
+        self.builtins.longdouble_type = CScalarType(name='long double',
+                                                    signed=True)
 
         # create mapping to ctypes
         cm = {
@@ -349,15 +352,9 @@ class CTypeSystem(object):
 #-------------------------------------------------------------------------------
 
 class Qualifiers(adt.FlagSet):
-    class Enum(object):
-        def __init__(self, name):
-            self.name = name
-        def __str__(self):
-            return self.name
-
-    CONST = Enum('const')
-    RESTRICT = Enum('restrict')
-    VOLATILE = Enum('volatile')
+    CONST    = 'const'
+    RESTRICT = 'restrict'
+    VOLATILE = 'volatile'
 
     possibilities = CONST, RESTRICT, VOLATILE
 
