@@ -13,6 +13,7 @@ class CType(object):
     is_array = False
     is_struct = False
     is_pointer = False
+    is_function = False
 
     def __repr__(self):
         return '<%s %s>' % (type(self).__name__, self.describe())
@@ -57,6 +58,9 @@ class CPointerType(CType):
     def __ne__(self, other):
         return not (self == other)
 
+    def __hash__(self):
+        return hash(self.basetype)
+
     def __str__(self):
         return '%s*' % self.basetype
 
@@ -80,6 +84,9 @@ class CArrayType(CAggregateType):
 
     def __ne__(self, other):
         return not (self == other)
+
+    def __hash__(self):
+        return hash((self.basetype, self.size))
 
     def __str__(self):
         return '%s[%d]' % (self.basetype, self.size)
@@ -129,6 +136,35 @@ class CStructType(CAggregateType):
     def layout_equal(self, other):
         return all(self.members[a] == other.members[b]
                    for a, b in zip(self.members, other.members))
+
+class CFunctionType(CType):
+    is_function = True
+
+    def __init__(self, return_type, args, is_vararg=False):
+        self.return_type = QualType(return_type)
+        self.args = tuple(QualType(a) for a in args)
+        self.is_vararg = is_vararg
+
+    def __eq__(self, other):
+        if isinstance(other, CFunctionType):
+            return (self.return_type == other.return_type and
+                    all(a == b for a, b in zip(self.args, other.args)) and
+                    self.is_vararg  and other.is_vararg)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash((self.return_type, self.args, self.is_vararg))
+
+    def describe(self):
+        args = [str(a) for a in self.args]
+        if self.is_vararg:
+            args.append('...')
+        return '%s(%s)' % (self.return_type, ', '.join(args))
+
+    def __str__(self):
+        return self.describe()
 
 #-------------------------------------------------------------------------------
 # Type System
@@ -216,6 +252,9 @@ class CTypeSystem(object):
         cmap['intptr_type'] = getattr(ctypes, 'c_int%d' % ptrsize)
 
         self.init_type_mapping(cmap)
+
+    def get_function(self, ret, args, vararg=False):
+        return QualType(CFunctionType(ret, args, vararg))
 
     def get_intptr(self):
         return QualType(self.builtins.intptr_type)
@@ -347,6 +386,9 @@ class QualType(object):
 
     def __ne__(self, other):
         return not (self == other)
+
+    def __hash__(self):
+        return hash((self.type, self.qualifiers))
 
     def __str__(self):
         if self.qualifiers:

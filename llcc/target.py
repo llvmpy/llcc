@@ -81,6 +81,8 @@ class TargetInfo(object):
             ty = ty.type
         if ty.is_pointer:
             return self.ptrsize
+        elif ty.is_function:
+            raise ValueError("illegal align of function type")
         return self.align_table[ty]
 
     def get_sizeof(self, ty):
@@ -88,5 +90,7 @@ class TargetInfo(object):
             ty = ty.type
         if ty.is_pointer:
             return self.ptrsize
+        elif ty.is_function:
+            raise ValueError("illegal sizeof function type")
         return self.sizeof_table[ty]
 
