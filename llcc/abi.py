@@ -144,6 +144,110 @@ class X86_64ABIClasses(support.Classifier):
     classes = NO_CLASS, INTEGER, SSE, SSEUP, X87, X87UP, COMPLEX_X87, MEMORY
     default = NO_CLASS
 
+class X86_64Classifier(object):
+    honorsRevision0_98 = True
+
+    def __init__(self, target, ty, offset):
+        self.hi = self.lo = X86_64ABIClasses.NO_CLASS
+        self._active_lo = offset < 64
+        self.target = target
+        self.type = ty
+        self.offset = offset
+
+    @property
+    def current(self):
+        if self._active_lo:
+            return self.lo
+        else:
+            return self.hi
+
+    @current.setter
+    def current(self, val):
+        if self._active_lo:
+            self.lo = val
+        else:
+            self.hi = val
+
+    def classify(self):
+        self.current = X86_64ABIClasses.MEMORY
+        # classify lo
+        if self.type.is_void:
+            self.current = X86_64ABIClasses.NO_CLASS
+        elif self.type.is_scalar:
+            if self.type.is_integer:
+                if self.target.get_sizeof(self.type) > 64:
+                    raise NotImplementedError
+                else:
+                    self.current = X86_64ABIClasses.INTEGER
+            elif self.type.is_float:
+                if self.target.get_sizeof(self.type) > 64:
+                    raise NotImplementedError
+                else:
+                    self.current = X86_64ABIClasses.SSE
+        elif self.type.is_pointer:
+            self.current = X86_64ABIClasses.INTEGER
+        elif self.type.is_struct:
+            sizeof = self.target.get_sizeof(self.type)
+
+            # larger than 4 eightbytes
+            if sizeof > 4 * 8 * 8:
+                return
+
+            self.current = X86_64ABIClasses.NO_CLASS
+
+            # classify each field
+            for fieldname, fieldty in self.type.fields():
+                fieldty = fieldty.type
+                field_offset = self.type.get_field_offset(name=fieldname,
+                                                   target=self.target)
+
+
+                classifier = X86_64Classifier(self.target, fieldty,
+                                              offset=field_offset)
+                classifier.classify()
+                fldhi, fldlo = classifier.hi, classifier.lo
+
+                self.lo = self.merge(self.lo, fldlo)
+                self.hi = self.merge(self.hi, fldhi)
+                if self.lo is self.hi is X86_64ABIClasses.MEMORY:
+                    break;
+
+            self.postmerge(sizeof)
+
+    def postmerge(self, sizeof):
+        if self.hi is X86_64ABIClasses.MEMORY:
+            self.lo = X86_64ABIClasses.MEMORY
+        if (self.hi is X86_64ABIClasses.X87UP and
+                self.lo is not X86_64ABIClasses.X87 and
+                self.honorsRevision0_98):
+            self.lo = X86_64ABIClasses.MEMORY
+        if sizeof > 128 and (self.lo is not X86_64ABIClasses.SSE and
+                             self.hi is not X86_64ABIClasses.SSEUP):
+            self.lo = X86_64ABIClasses.MEMORY
+        if (self.hi is X86_64ABIClasses.SSEUP and
+                self.lo is not X86_64ABIClasses.SSE):
+            self.hi = X86_64ABIClasses.SSE
+
+    def merge(self, accum, field):
+        assert accum is not X86_64ABIClasses.MEMORY
+        assert accum is not X86_64ABIClasses.COMPLEX_X87
+
+        if accum is field:
+            return accum
+        elif field in (X86_64ABIClasses.MEMORY,
+                     X86_64ABIClasses.NO_CLASS):
+            return field
+        elif (accum is X86_64ABIClasses.INTEGER or
+              field is X86_64ABIClasses.INTEGER):
+            return X86_64ABIClasses.INTEGER
+        elif (field in (X86_64ABIClasses.X87, X86_64ABIClasses.X87UP,
+                        X86_64ABIClasses.COMPLEX_X87) or
+              accum in (X86_64ABIClasses.X87, X86_64ABIClasses.X87UP)):
+            return X86_64ABIClasses.MEMORY
+        else:
+            return X86_64ABIClasses.SSE
+
+
 class X86_64ABIInfo(ABIInfo):
     '''This ABI is used by most opensource OSes, various *nix flavours
     
@@ -156,18 +260,23 @@ class X86_64ABIInfo(ABIInfo):
         if isinstance(retty, llcc.typesystem.QualType):
             retty = retty.type
 
-        hi, lo = self.classify(retty)
+        hi, lo = self.classify(retty, offset=0)
 
         if hi is lo is X86_64ABIClasses.NO_CLASS:
             return IgnoreArgInfo()
-        print(cls)
+
         assert False, 'TODO'
 
     def classify_argument_type(self, argty):
         if isinstance(argty, llcc.typesystem.QualType):
             argty = argty.type
 
-        hi, lo = self.classify(argty)
+        hi, lo = self.classify(argty, offset=0)
+        print('argty', hi, lo)
+        assert (not hi is X86_64ABIClasses.MEMORY or
+                lo is X86_64ABIClasses.MEMORY)
+        assert (not hi is X86_64ABIClasses.SSEUP or
+                lo is X86_64ABIClasses.MEMORY.SSE)
         restype = None
 
         regct = 0       # GP-register needed
@@ -175,7 +284,8 @@ class X86_64ABIInfo(ABIInfo):
 
         # Lo class
         if lo is X86_64ABIClasses.NO_CLASS:
-            return IgnoreArgInfo()
+            if hi is X86_64ABIClasses.NO_CLASS:
+                return IgnoreArgInfo()
         elif lo in (X86_64ABIClasses.X87, X86_64ABIClasses.COMPLEX_X87):
             assert False, 'TODO'
         elif lo in (X86_64ABIClasses.SSEUP, X86_64ABIClasses.X87UP):
@@ -193,31 +303,19 @@ class X86_64ABIInfo(ABIInfo):
         # Hi class
         if hi is X86_64ABIClasses.NO_CLASS:
             pass
+        elif hi is X86_64ABIClasses.SSE:
+            highpart = self.get_sse_type(argty, offset=8)
+            if lo is X86_64ABIClasses.NO_CLASS:
+                return DirectArgInfo(highpart, offset=8)
         else:
             assert False, "TODO"
 
         return DirectArgInfo(coerce_type=resty)
 
-
-    def classify(self, ty):
-        hi = lo = X86_64ABIClasses.NO_CLASS
-        if ty.is_void:
-            lo = X86_64ABIClasses.NO_CLASS
-        elif ty.is_scalar:
-            if ty.is_integer:
-                if self.target.get_sizeof(ty) > 64:
-                    raise NotImplementedError
-                else:
-                    lo = X86_64ABIClasses.INTEGER
-            elif ty.is_float:
-                if self.target.get_sizeof(ty) > 64:
-                    raise NotImplementedError
-                else:
-                    lo = X86_64ABIClasses.SSE
-        elif ty.is_pointer:
-            lo = X86_64ABIClasses.INTEGER
-
-        return hi, lo
+    def classify(self, typ, offset):
+        classifier = X86_64Classifier(self.target, typ, offset)
+        classifier.classify()
+        return classifier.hi, classifier.lo
 
     def get_integer_type(self, ty, offset):
         if offset == 0:
@@ -231,17 +329,23 @@ class X86_64ABIInfo(ABIInfo):
     def get_sse_type(self, ty, offset):
         if ty.is_scalar and (ty.is_float or ty.is_double):
             return ty
-        elif ty.is_struct:
-            ts = self.typesystem
-            float_t = ts.get_float()
-            floatat0 = ty.has_at_offset(float_t, offset=0, target=self.target)
-            floatat4 = ty.has_float_at_offset(float_t, offset=4,
-                                              target=self.target)
-            if floatat0 and floatat4:
-                vecty = ts.get_vector(ts.get_float())
-                return vecty
 
-        assert False
+        ts = self.target.typesystem
+        if ty.is_aggregate and len(ty) == 2:
+
+            float_t = ts.get_float()
+            floatat0 = ty.has_type_at_offset(float_t, offset=0,
+                                             target=self.target)
+            floatat4 = ty.has_type_at_offset(float_t, offset=4,
+                                             target=self.target)
+            if floatat0 and floatat4:
+                vecty = ts.get_vector(ts.get_float(), 2)
+                return vecty
+        else:
+            assert ty.is_struct
+            assert all(ts.get_float() == fty
+                       for fty in ty.fieldtypes())
+            return
 
 ABI_INFOS = {
     'SystemV/x86_64': X86_64ABIInfo

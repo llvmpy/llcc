@@ -84,6 +84,11 @@ class TargetInfo(object):
             return self.ptrsize
         elif ty.is_function:
             raise ValueError("illegal sizeof function type")
+        elif ty.is_aggregate:
+            if ty.is_struct:
+                print(list(ty))
+                return sum(self.get_sizeof(field) for field in ty)
+            assert False, "TODO"
         return self.sizeof_table[ty]
 
     def compute_abi_info(self, fnty):

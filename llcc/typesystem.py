@@ -95,6 +95,10 @@ class CAggregateType(CType):
     is_aggregate = True
 
     def has_type_at_offset(self, ty, offset, target):
+        '''
+        :param offset: byte offset
+        '''
+        offset = offset * 8
         if isinstance(ty, QualType):
             ty = ty.type
         off = 0
@@ -114,7 +118,7 @@ class CHomoType(CAggregateType):
         self.size = size
 
     def __eq__(self, other):
-        return (isinstance(other, CArray) and
+        return (isinstance(other, type(self)) and
                 self.basetype == other.basetype and
                 self.size == other.size)
 
@@ -178,7 +182,16 @@ class CStructType(CAggregateType):
         return len(self.members)
 
     def __iter__(self):
+        return iter(self[k] for k in self.members)
+
+    def fields(self):
+        return zip(self.members, self)
+
+    def fieldnames(self):
         return iter(self.members)
+
+    def fieldtypes(self):
+        return iter(self)
 
     def __str__(self):
         head = 'struct %s' % self.name
@@ -200,6 +213,25 @@ class CStructType(CAggregateType):
     def layout_equal(self, other):
         return all(self.members[a] == other.members[b]
                    for a, b in zip(self.members, other.members))
+
+    def get_field_offset(self, name, target):
+        fieldty = self.members[name]
+        offset = 0
+        for fname, fty in self.fields():
+            if fname == name:
+                return offset
+            else:
+                offset += target.get_sizeof(fieldty)
+        raise NameError(name)
+
+    def get_field_at_offset(self, offset, target):
+        off = 0
+        for fty in self.fieldtypes():
+            if offset * 8 == off:
+                return fty
+            else:
+                off += target.get_sizeof(fty)
+        raise ValueError(offset)
 
 class CFunctionType(CType):
     is_function = True
@@ -383,6 +415,9 @@ class CTypeSystem(object):
 
     def get_array(self, ty, ct):
         return QualType(CArrayType(ty, ct))
+
+    def get_vector(self, ty, ct):
+        return QualType(CVectorType(ty, ct))
 
     def get_struct(self, name, members=None):
         '''

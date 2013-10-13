@@ -42,6 +42,8 @@ class OrderedAttrs(Sequence):
         return self.__kv[k]
 
     def __getitem__(self, k):
+        if isinstance(k, int):
+            k = self.__seq[k]
         return self.__kv[k]
 
     def __iter__(self):
