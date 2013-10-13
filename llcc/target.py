@@ -92,3 +92,4 @@ class TargetInfo(object):
             fnty = fnty.type
         abi_info.compute_info(fnty)
         return abi_info
+

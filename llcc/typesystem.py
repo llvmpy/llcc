@@ -10,6 +10,7 @@ class CType(object):
     is_void = False
     is_scalar = False
     is_aggregate = False
+    is_vector = False
     is_array = False
     is_struct = False
     is_pointer = False
@@ -40,6 +41,12 @@ class CIntegerType(CScalarType):
     is_integer = True
     is_signed = False
     is_unsigned = False
+    
+    def __init__(self, name, bitwidth, promotable=False):
+        self.name = name
+        self.bitwidth = bitwidth
+        self.is_promotable = promotable
+
 
 class CSignedType(CIntegerType):
     is_signed = True
@@ -87,8 +94,20 @@ class CPointerType(CType):
 class CAggregateType(CType):
     is_aggregate = True
 
-class CArrayType(CAggregateType):
-    is_array = True
+    def has_type_at_offset(self, ty, offset, target):
+        if isinstance(ty, QualType):
+            ty = ty.type
+        off = 0
+        for qualtype in self:
+            t = qualtype.type
+            if off > offset:
+                break
+            elif off == offset:
+                return ty == t
+            off += target.get_sizeof(t)
+        return False
+
+class CHomoType(CAggregateType):
 
     def __init__(self, basetype, size):
         self.basetype = QualType(basetype)
@@ -105,11 +124,36 @@ class CArrayType(CAggregateType):
     def __hash__(self):
         return hash((self.basetype, self.size))
 
+    def __len__(self):
+        return self.size
+
+    def __iter__(self):
+        return iter([self.basetype] * len(self))
+
+    def __getitem__(self, i):
+        if i < 0:
+            i = len(self) + i
+        if i >= len(self):
+            raise IndexError(i)
+        return self.basetype
+
+class CArrayType(CHomoType):
+    is_array = True
+    
     def __str__(self):
         return '%s[%d]' % (self.basetype, self.size)
 
     def describe(self):
-        return '%s x %d' % (self.basetype, self.size)
+        return '[%s x %d]' % (self.basetype, self.size)
+
+class CVectorType(CHomoType):
+    is_vector = True
+    
+    def __str__(self):
+        return '<%s x %d>' % (self.basetype, self.size)
+
+    def describe(self):
+        return '<%s x %d>' % (self.basetype, self.size)
 
 class CStructType(CAggregateType):
     is_struct = True
@@ -142,6 +186,9 @@ class CStructType(CAggregateType):
             return head
         else:
             return '%s{%s}' % (head, self.describe_members())
+
+    def __getitem__(self, i):
+        return self.members[i]
 
     def describe_members(self):
         mms = ['%s %s' % (self.members[name], name) for name in self.members]
@@ -196,22 +243,29 @@ class CTypeSystem(object):
     def load_sys_independ_builtins(self):
         # specials
         self.builtins.void_type = CVoidType()
-        self.builtins.bool_type  = CUnsignedType(name='_Bool')
+        self.builtins.bool_type  = CUnsignedType(name='_Bool', bitwidth=8,
+                                                 promotable=True)
         # chars
-        self.builtins.char_type  = CSignedType(name='char')
-        self.builtins.uchar_type = CUnsignedType(name='unsigned char')
+        self.builtins.char_type  = CSignedType(name='char', bitwidth=8,
+                                               promotable=True)
+        self.builtins.uchar_type = CUnsignedType(name='unsigned char',
+                                                 bitwidth=8, promotable=True)
 
         # signed integer
-        self.builtins.int8_type  = CSignedType(name='int8_t')
-        self.builtins.int16_type = CSignedType(name='int16_t')
-        self.builtins.int32_type = CSignedType(name='int32_t')
-        self.builtins.int64_type = CSignedType(name='int64_t')
+        self.builtins.int8_type  = CSignedType(name='int8_t', bitwidth=8,
+                                               promotable=True)
+        self.builtins.int16_type = CSignedType(name='int16_t', bitwidth=16,
+                                               promotable=True)
+        self.builtins.int32_type = CSignedType(name='int32_t', bitwidth=32)
+        self.builtins.int64_type = CSignedType(name='int64_t', bitwidth=64)
 
         # unsigned integer
-        self.builtins.uint8_type  = CUnsignedType(name='uint8_t')
-        self.builtins.uint16_type = CUnsignedType(name='uint16_t')
-        self.builtins.uint32_type = CUnsignedType(name='uint32_t')
-        self.builtins.uint64_type = CUnsignedType(name='uint64_t')
+        self.builtins.uint8_type  = CUnsignedType(name='uint8_t', bitwidth=8,
+                                                  promotable=True)
+        self.builtins.uint16_type = CUnsignedType(name='uint16_t', bitwidth=16,
+                                                  promotable=True)
+        self.builtins.uint32_type = CUnsignedType(name='uint32_t', bitwidth=32)
+        self.builtins.uint64_type = CUnsignedType(name='uint64_t', bitwidth=64)
 
         # real
         self.builtins.float_type = CFloatType(name='float')
