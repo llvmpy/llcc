@@ -93,6 +93,33 @@ class TestABI_X86_64(unittest.TestCase):
         self.assertTrue(abi.return_info.is_ignore)
         self.assertTrue(abi.arg_infos[0].is_indirect)
 
+    def test_2double(self):
+        args = []
+        fty = self.ts.get_double()
+        args.append(self.ts.get_unnamed_struct([fty] * 2))
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+
+        self.assertTrue(abi.return_info.is_ignore)
+
+        # pass as {double, double}
+        self.assertTrue(abi.arg_infos[0].is_direct)
+        self.assertEqual(abi.arg_infos[0].coerce_type[0], fty)
+        self.assertEqual(abi.arg_infos[0].coerce_type[1], fty)
+
+    def test_3double(self):
+        args = []
+        fty = self.ts.get_double()
+        args.append(self.ts.get_unnamed_struct([fty] * 3))
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+
+        self.assertTrue(abi.return_info.is_ignore)
+
+        # pass as on the stack
+        self.assertTrue(abi.arg_infos[0].is_indirect)
 
 
 

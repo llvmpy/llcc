@@ -353,9 +353,11 @@ class X86_64ABIInfo(ABIInfo):
         assert False, "TODO"
 
     def get_sse_type(self, ty, offset):
-        if ty.is_scalar and (ty.is_float or ty.is_double):
-            return ty
-
+        '''
+        Note: Float and double are returned on XMM.
+              Float at byte offset 0 and 4 of aggregate are passed
+              as vector <float x 2>.
+        '''
         ts = self.target.typesystem
         if ty.is_aggregate:
             offlo = offset
@@ -365,12 +367,14 @@ class X86_64ABIInfo(ABIInfo):
                                              target=self.target)
             floatat4 = ty.has_type_at_offset(float_t, offset=offhi,
                                              target=self.target)
-            if floatat0:
-                if floatat4:
+            if floatat0 and floatat4:
                     vecty = ts.get_vector(ts.get_float(), 2)
                     return vecty
-                else:
-                    return float_t
+
+            ty = ty.get_field_at_offset(offset=0, target=self.target).type
+
+        if ty.is_scalar and (ty.is_float or ty.is_double):
+            return ty
 
         assert False
 
