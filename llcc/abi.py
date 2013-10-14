@@ -201,12 +201,10 @@ class X86_64Classifier(object):
                 field_offset = self.type.get_field_offset(name=fieldname,
                                                    target=self.target)
 
-
                 classifier = X86_64Classifier(self.target, fieldty,
                                               offset=field_offset)
                 classifier.classify()
                 fldhi, fldlo = classifier.hi, classifier.lo
-
                 self.lo = self.merge(self.lo, fldlo)
                 self.hi = self.merge(self.hi, fldhi)
                 if self.lo is self.hi is X86_64ABIClasses.MEMORY:
@@ -232,20 +230,20 @@ class X86_64Classifier(object):
         assert accum is not X86_64ABIClasses.MEMORY
         assert accum is not X86_64ABIClasses.COMPLEX_X87
 
-        if accum is field:
+        if accum is field or field is X86_64ABIClasses.NO_CLASS:
             return accum
-        elif field in (X86_64ABIClasses.MEMORY,
-                     X86_64ABIClasses.NO_CLASS):
+        if field is X86_64ABIClasses.MEMORY:
             return field
-        elif (accum is X86_64ABIClasses.INTEGER or
-              field is X86_64ABIClasses.INTEGER):
+        if accum is X86_64ABIClasses.NO_CLASS:
+            return field
+        if (accum is X86_64ABIClasses.INTEGER or
+                field is X86_64ABIClasses.INTEGER):
             return X86_64ABIClasses.INTEGER
-        elif (field in (X86_64ABIClasses.X87, X86_64ABIClasses.X87UP,
-                        X86_64ABIClasses.COMPLEX_X87) or
-              accum in (X86_64ABIClasses.X87, X86_64ABIClasses.X87UP)):
+        if (field is X86_64ABIClasses.X87 or field is X86_64ABIClasses.X87UP or
+              field is X86_64ABIClasses.COMPLEX_X87 or
+              accum is X86_64ABIClasses.X87 or accum is X86_64ABIClasses.X87UP):
             return X86_64ABIClasses.MEMORY
-        else:
-            return X86_64ABIClasses.SSE
+        return X86_64ABIClasses.SSE
 
 
 class X86_64ABIInfo(ABIInfo):
@@ -300,7 +298,9 @@ class X86_64ABIInfo(ABIInfo):
             ssect += 1
             resty = self.get_sse_type(argty, offset=0)
 
+        print(lo, hi)
         # Hi class
+        highpart = None
         if hi is X86_64ABIClasses.NO_CLASS:
             pass
         elif hi is X86_64ABIClasses.SSE:
@@ -309,6 +309,8 @@ class X86_64ABIInfo(ABIInfo):
                 return DirectArgInfo(highpart, offset=8)
         else:
             assert False, "TODO"
+
+        assert highpart is None
 
         return DirectArgInfo(coerce_type=resty)
 
