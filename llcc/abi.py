@@ -6,6 +6,7 @@ Reference to
 - http://clang.llvm.org/doxygen/CodeGen_2TargetInfo_8cpp_source.html
     See X86_32ABIInfo, computeInfo, classifyArgumentType
 '''
+from __future__ import print_function
 from llcc import support
 import llcc.typesystem
 
@@ -298,7 +299,6 @@ class X86_64ABIInfo(ABIInfo):
             ssect += 1
             resty = self.get_sse_type(argty, offset=0)
 
-        print(lo, hi)
         # Hi class
         highpart = None
         if hi is X86_64ABIClasses.NO_CLASS:
@@ -310,14 +310,19 @@ class X86_64ABIInfo(ABIInfo):
         else:
             assert False, "TODO"
 
-        assert highpart is None
-
+        if highpart is not None:
+            resty = self.get_byval_argument(resty, highpart, target=self.target)
         return DirectArgInfo(coerce_type=resty)
 
     def classify(self, typ, offset):
         classifier = X86_64Classifier(self.target, typ, offset)
         classifier.classify()
         return classifier.hi, classifier.lo
+
+    def get_byval_argument(self, lo, hi, target):
+        stty = target.typesystem.get_unnamed_struct([lo, hi]).type
+        assert stty.get_field_offset('__1', target=self.target) == 8 * 8
+        return stty
 
     def get_integer_type(self, ty, offset):
         if offset == 0:
@@ -333,21 +338,22 @@ class X86_64ABIInfo(ABIInfo):
             return ty
 
         ts = self.target.typesystem
-        if ty.is_aggregate and len(ty) == 2:
-
+        if ty.is_aggregate:
+            offlo = offset
+            offhi = offset + 4
             float_t = ts.get_float()
-            floatat0 = ty.has_type_at_offset(float_t, offset=0,
+            floatat0 = ty.has_type_at_offset(float_t, offset=offlo,
                                              target=self.target)
-            floatat4 = ty.has_type_at_offset(float_t, offset=4,
+            floatat4 = ty.has_type_at_offset(float_t, offset=offhi,
                                              target=self.target)
-            if floatat0 and floatat4:
-                vecty = ts.get_vector(ts.get_float(), 2)
-                return vecty
-        else:
-            assert ty.is_struct
-            assert all(ts.get_float() == fty
-                       for fty in ty.fieldtypes())
-            return
+            if floatat0:
+                if floatat4:
+                    vecty = ts.get_vector(ts.get_float(), 2)
+                    return vecty
+                else:
+                    return float_t
+
+        assert False
 
 ABI_INFOS = {
     'SystemV/x86_64': X86_64ABIInfo

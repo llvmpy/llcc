@@ -60,8 +60,10 @@ class TestABI_X86_64(unittest.TestCase):
         first = self.ts.get_vector(fty, 2)
         second = fty
 
-        #self.assertEqual(abi.arg_infos[0].is_direct)
-        raise AssertionError('WIP')
+        self.assertTrue(abi.arg_infos[0].is_direct)
+        self.assertEqual(abi.arg_infos[0].coerce_type[0], first)
+        self.assertEqual(abi.arg_infos[0].coerce_type[1], second)
+
 
 if __name__ == '__main__':
     unittest.main()

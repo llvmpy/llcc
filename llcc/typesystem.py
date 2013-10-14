@@ -167,9 +167,16 @@ class CStructType(CAggregateType):
         self.members = None
 
     def define(self, members):
-        cvtmm = [(k, QualType(v)) for k, v in members]
-        self.members = adt.OrderedAttrs(members)
+        cvtmm = [self._expand_member_desc(mm, i)
+                 for i, mm in enumerate(members)]
+        self.members = adt.OrderedAttrs(cvtmm)
         return self
+
+    def _expand_member_desc(self, desc, count):
+        if isinstance(desc, (tuple, list)) and len(desc) == 2:
+            k, v = desc
+            return k, QualType(v)
+        return '__%d' % count, QualType(desc)
 
     def undefine(self):
         self.members = None
@@ -215,13 +222,14 @@ class CStructType(CAggregateType):
                    for a, b in zip(self.members, other.members))
 
     def get_field_offset(self, name, target):
-        fieldty = self.members[name]
+        fieldty = self.members[str(name)]
         offset = 0
         for fname, fty in self.fields():
             if fname == name:
                 return offset
             else:
-                offset += target.get_sizeof(fieldty)
+                sz = target.get_sizeof(fty)
+                offset += target.get_sizeof(fty)
         raise NameError(name)
 
     def get_field_at_offset(self, offset, target):
@@ -489,6 +497,9 @@ class QualType(object):
 
     def __hash__(self):
         return hash((self.type, self.qualifiers))
+
+    def __repr__(self):
+        return '<QualType %s>' % self
 
     def __str__(self):
         if self.qualifiers:
