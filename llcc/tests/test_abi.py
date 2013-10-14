@@ -45,7 +45,7 @@ class TestABI_X86_64(unittest.TestCase):
         vecty = self.ts.get_vector(self.ts.get_float(), 2)
         self.assertEqual(abi.arg_infos[0].coerce_type, vecty)
 
-    def test_3floats_as_is(self):
+    def test_3float(self):
         args = []
         fty = self.ts.get_float()
         args.append(self.ts.get_unnamed_struct([('f0', fty), ('f2', fty),
@@ -63,6 +63,37 @@ class TestABI_X86_64(unittest.TestCase):
         self.assertTrue(abi.arg_infos[0].is_direct)
         self.assertEqual(abi.arg_infos[0].coerce_type[0], first)
         self.assertEqual(abi.arg_infos[0].coerce_type[1], second)
+
+    def test_4float(self):
+        args = []
+        fty = self.ts.get_float()
+        args.append(self.ts.get_unnamed_struct([fty] * 4))
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+        
+        self.assertTrue(abi.return_info.is_ignore)
+
+        # pass as two argument: <float x 2>, <float x 2>
+        vecty = self.ts.get_vector(fty, 2)
+
+        self.assertTrue(abi.arg_infos[0].is_direct)
+        self.assertEqual(abi.arg_infos[0].coerce_type[0], vecty)
+        self.assertEqual(abi.arg_infos[0].coerce_type[1], vecty)
+
+    def test_5float(self):
+        args = []
+        fty = self.ts.get_float()
+        args.append(self.ts.get_unnamed_struct([fty] * 5))
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+
+        # pass on the stack
+        self.assertTrue(abi.return_info.is_ignore)
+        self.assertTrue(abi.arg_infos[0].is_indirect)
+
+
 
 
 if __name__ == '__main__':

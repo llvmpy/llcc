@@ -190,14 +190,27 @@ class X86_64Classifier(object):
         elif self.type.is_struct:
             sizeof = self.target.get_sizeof(self.type)
 
-            # larger than 4 eightbytes
+            # larger than 4 eightbytes, then MEMORY
             if sizeof > 4 * 8 * 8:
+                assert self.lo is X86_64ABIClasses.MEMORY
                 return
 
             self.current = X86_64ABIClasses.NO_CLASS
 
             # classify each field
             for fieldname, fieldty in self.type.fields():
+                # Rule 5c
+                #    If the size of the aggregate exceeds two eightbytes
+                #   and the first eight-byte isn't SSE or any other eightbyte
+                #   isn't SSEUP, the whole argument is passed in memory.
+                #
+                # Clang said that this rule will only apply to a structure
+                # with a single 256-bit element.
+                if sizeof > 128 and self.target.get_sizeof(fieldty) != 256:
+
+                    self.lo = X86_64ABIClasses.MEMORY
+                    return
+
                 fieldty = fieldty.type
                 field_offset = self.type.get_field_offset(name=fieldname,
                                                    target=self.target)
@@ -206,8 +219,10 @@ class X86_64Classifier(object):
                                               offset=field_offset)
                 classifier.classify()
                 fldhi, fldlo = classifier.hi, classifier.lo
+
                 self.lo = self.merge(self.lo, fldlo)
                 self.hi = self.merge(self.hi, fldhi)
+
                 if self.lo is self.hi is X86_64ABIClasses.MEMORY:
                     break;
 
@@ -271,7 +286,7 @@ class X86_64ABIInfo(ABIInfo):
             argty = argty.type
 
         hi, lo = self.classify(argty, offset=0)
-        print('argty', hi, lo)
+
         assert (not hi is X86_64ABIClasses.MEMORY or
                 lo is X86_64ABIClasses.MEMORY)
         assert (not hi is X86_64ABIClasses.SSEUP or
@@ -298,6 +313,10 @@ class X86_64ABIInfo(ABIInfo):
         elif lo is X86_64ABIClasses.SSE:
             ssect += 1
             resty = self.get_sse_type(argty, offset=0)
+        elif lo is X86_64ABIClasses.MEMORY:
+            return IndirectArgInfo()
+        else:
+            assert False
 
         # Hi class
         highpart = None
