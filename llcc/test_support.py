@@ -10,7 +10,7 @@ class TestSystem(object):
         self.regex_tests = re.compile('^test', re.I)
 
     def discover(self, mod):
-        path = mod.__name__.replace('.', os.path.sep)
+        path = mod.__path__[0]
         self.scan_directory(mod.__name__, path)
 
     def scan_directory(self, mod ,curdir):
