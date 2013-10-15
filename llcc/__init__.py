@@ -5,5 +5,5 @@ def test(verbosity=3, buffer=True):
     tsys = TestSystem()
     tsys.discover(llcc.tests)
     tr = tsys.run(verbosity=verbosity, buffer=buffer)
-    return int(not tr.wasSuccessful())
+    return tr.wasSuccessful()
 
