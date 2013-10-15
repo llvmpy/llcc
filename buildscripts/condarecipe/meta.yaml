@@ -1,0 +1,21 @@
+package:
+  name: llcc
+  version: 99.9.9
+
+source:
+  git_url: git@github.com:ContinuumIO/llcc.git
+  #git_tag: 0.1.1
+
+requirements:
+  build:
+    - python
+    - llvmpy
+
+  run:
+    - python
+    - llvmpy
+
+test:
+  imports:
+    - llcc
+
