@@ -150,7 +150,7 @@ class X86_64Classifier(object):
 
     def __init__(self, target, ty, offset):
         self.hi = self.lo = X86_64ABIClasses.NO_CLASS
-        self._active_lo = offset < 64
+        self._active_lo = offset < 8
         self.target = target
         self.type = ty
         self.offset = offset
@@ -262,6 +262,11 @@ class X86_64Classifier(object):
         return X86_64ABIClasses.SSE
 
 
+class X86_64Registers(object):
+    def __init__(self):
+        self.need_int = 0
+        self.need_sse = 0
+
 class X86_64ABIInfo(ABIInfo):
     '''This ABI is used by most opensource OSes, various *nix flavours
     
@@ -281,7 +286,7 @@ class X86_64ABIInfo(ABIInfo):
 
         assert False, 'TODO'
 
-    def classify_argument_type(self, argty):
+    def classify_argument_type(self, argty, reg):
         if isinstance(argty, llcc.typesystem.QualType):
             argty = argty.type
 
@@ -293,9 +298,6 @@ class X86_64ABIInfo(ABIInfo):
                 lo is X86_64ABIClasses.MEMORY.SSE)
         restype = None
 
-        regct = 0       # GP-register needed
-        ssect = 0       # SSE register needed
-
         # Lo class
         if lo is X86_64ABIClasses.NO_CLASS:
             if hi is X86_64ABIClasses.NO_CLASS:
@@ -305,13 +307,13 @@ class X86_64ABIInfo(ABIInfo):
         elif lo in (X86_64ABIClasses.SSEUP, X86_64ABIClasses.X87UP):
             raise AssertionError("invalid ABI classification")
         elif lo is X86_64ABIClasses.INTEGER:
-            regct += 1
+            reg.need_int += 1
             resty = self.get_integer_type(argty, offset=0)
             if (hi == X86_64ABIClasses.NO_CLASS and resty.is_scalar and
                 resty.is_integer and resty.is_promotable):
                 return ExtendArgInfo()
         elif lo is X86_64ABIClasses.SSE:
-            ssect += 1
+            reg.need_sse += 1
             resty = self.get_sse_type(argty, offset=0)
         elif lo is X86_64ABIClasses.MEMORY:
             return IndirectArgInfo()
@@ -324,6 +326,10 @@ class X86_64ABIInfo(ABIInfo):
             pass
         elif hi is X86_64ABIClasses.SSE:
             highpart = self.get_sse_type(argty, offset=8)
+            if lo is X86_64ABIClasses.NO_CLASS:
+                return DirectArgInfo(highpart, offset=8)
+        elif hi is X86_64ABIClasses.INTEGER:
+            highpart = self.get_integer_type(argty, offset=8)
             if lo is X86_64ABIClasses.NO_CLASS:
                 return DirectArgInfo(highpart, offset=8)
         else:
@@ -340,17 +346,32 @@ class X86_64ABIInfo(ABIInfo):
 
     def get_byval_argument(self, lo, hi, target):
         stty = target.typesystem.get_unnamed_struct([lo, hi]).type
-        assert stty.get_field_offset('__1', target=self.target) == 8 * 8
+        histart = stty.get_field_offset('__1', target=self.target)
+        assert 0 < histart <= 8
+        if histart != 8:
+            raise NotImplementedError
         return stty
 
     def get_integer_type(self, ty, offset):
+        '''
+        Corresponds to clang X86_64ABIInfo::GetINTEGERTypeAtOffset
+        '''
         if offset == 0:
             if self.target.ptrsize == 64 and ty.is_pointer:
                 return ty
             if (ty.is_scalar and ty.is_integer and
                 (ty.bitwidth in (8, 16, 32) or ty.is_pointer)):
                 return ty
-        assert False, "TODO"
+
+        if ty.is_struct:
+            # recurse the the field at offset
+            field = ty.get_field_at_offset(offset, self.target)
+            return self.get_integer_type(ty=field.type, offset=0)
+
+        assert False
+        tybytesize = (self.target.get_sizeof(ty) + 7) // 8      # roundup
+        return self.target.typesystem.get_uint(min(tybytesize - offset, 8) * 8)
+
 
     def get_sse_type(self, ty, offset):
         '''
@@ -377,6 +398,36 @@ class X86_64ABIInfo(ABIInfo):
             return ty
 
         assert False
+
+    def compute_info(self, fnty):
+        self.return_info = self.classify_return_type(fnty.return_type)
+        self.arg_infos = []
+        free_int = 6
+        free_sse = 8
+        for a in fnty.args:
+            needreg = X86_64Registers()
+            info = self.classify_argument_type(a, needreg)
+            if (free_int >= needreg.need_int
+                    and free_sse >= needreg.need_sse):
+                free_int -= needreg.need_int
+                free_sse -= needreg.need_sse
+            else:
+                assert info.coerce_type is not None
+                info = self.get_indirect_result(info.coerce_type,
+                                                free_int)
+
+            self.arg_infos.append(info)
+
+    def get_indirect_result(self, ty, free_int):
+        if ty.is_scalar:
+            # scalars are passed directly to LLVM
+            return DirectArgInfo()
+        else:
+            # aggregates are passed on the stack
+            raise NotImplementedError
+            align = max(self.target.get_align(ty) // 8, 8)
+            return IndirectArgInfo(align=align)
+
 
 ABI_INFOS = {
     'SystemV/x86_64': X86_64ABIInfo

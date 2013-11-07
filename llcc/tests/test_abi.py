@@ -121,7 +121,58 @@ class TestABI_X86_64(unittest.TestCase):
         # pass as on the stack
         self.assertTrue(abi.arg_infos[0].is_indirect)
 
+    def test_6ints(self):
+        args = []
+        ity = self.ts.get_int()
+        for i in range(6):
+            args.append(ity)
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
 
+        # all args are passed directly
+        for arginfo in abi.arg_infos:
+            self.assertTrue(arginfo.is_direct)
+
+    def test_7ints(self):
+        args = []
+        ity = self.ts.get_int()
+        for i in range(7):
+            args.append(ity)
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+
+        # all args are passed directly
+        for arginfo in abi.arg_infos:
+            self.assertTrue(arginfo.is_direct)
+
+    def test_7ints(self):
+        args = []
+        ity = self.ts.get_int()
+        for i in range(7):
+            args.append(ity)
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
+
+        # all args are passed directly
+        for arginfo in abi.arg_infos[:-1]:
+            self.assertTrue(arginfo.is_direct)
+            self.assertFalse(arginfo.coerce_type is None)
+        arginfo = abi.arg_infos[-1]
+        self.assertTrue(arginfo.is_direct)
+        self.assertTrue(arginfo.coerce_type is None)
+
+    def test_onstack_intstruct(self):
+        args = []
+        ity = self.ts.get_int()
+        for i in range(1):
+            args.append(ity)
+        args.append(self.ts.get_unnamed_struct([ity] * 3))
+        fnty = self.ts.get_function(self.ts.get_void(), args)
+        abi = self.ti.compute_abi_info(fnty)
+        print(abi)
 
 if __name__ == '__main__':
     unittest.main()

@@ -222,14 +222,16 @@ class CStructType(CAggregateType):
                    for a, b in zip(self.members, other.members))
 
     def get_field_offset(self, name, target):
+        '''Returns byte offset to a field
+        '''
         fieldty = self.members[str(name)]
         offset = 0
         for fname, fty in self.fields():
             if fname == name:
-                return offset
+                return offset // 8
             else:
                 sz = target.get_sizeof(fty)
-                offset += target.get_sizeof(fty)
+                offset += sz
         raise NameError(name)
 
     def get_field_at_offset(self, offset, target):
