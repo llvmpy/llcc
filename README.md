@@ -2,6 +2,12 @@
 
 A llvmpy extension for building C ABI comformant LLVM IR.
 
+## Status
+
+On hold.  It is a lot harder than I thought and it will take a lot of time.  
+Hoping LLVM will put some of the ABI stuffs into LLVM itself and not in clang.
+
+
 ## Why?
 
 LLVM provides a machine abstraction but not ABI abstaction, 
